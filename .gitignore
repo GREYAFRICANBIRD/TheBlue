@@ -1,0 +1,14 @@
+# PyInstaller build artifacts
+build/
+dist/
+*.spec
+*.zip
+*.exe
+
+# Python cache
+__pycache__/
+*.pyc
+
+# OS generated
+.DS_Store
+Thumbs.db

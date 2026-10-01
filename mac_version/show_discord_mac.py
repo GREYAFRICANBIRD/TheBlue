@@ -22,7 +22,12 @@ def load_config():
             "owob": 15.0
         },
         "random_order": True,
-        "max_interval": 3.0
+        "max_interval": 3.0,
+        "check_hnsr": True,
+        "hnsr_command": "hnsr",
+        "hnsr_frequency": 20,
+        "target_owo_today": 300,
+        "check_hnsr_on_start": True
     }
     
     if not os.path.exists(CONFIG_FILE):
@@ -44,16 +49,54 @@ MAX_COOLDOWNS = config.get("max_cooldowns", {"owo": 10.0, "owoh": 15.0, "owob": 
 RANDOM_ORDER = config.get("random_order", True)
 MAX_INTERVAL = config.get("max_interval", 3.0)
 
+# HNSR / Today Target configurations
+CHECK_HNSR = config.get("check_hnsr", True)
+HNSR_COMMAND = config.get("hnsr_command", "hnsr")
+HNSR_FREQUENCY = max(1, config.get("hnsr_frequency", 20))
+TARGET_OWO_TODAY = config.get("target_owo_today", 300)
+CHECK_HNSR_ON_START = config.get("check_hnsr_on_start", True)
+
 def normalize_text(text):
     text = re.sub(r'[\u200b-\u200d\ufeff]', '', text)
     text = re.sub(r'\s+', ' ', text)
     return text.strip().lower()
 
+def clean_text_for_parsing(text):
+    t = re.sub(r'[\u200b-\u200d\ufeff]', '', text)
+    t = re.sub(r'[*_`~>]', ' ', t)
+    t = re.sub(r'[ \t]+', ' ', t)
+    return t
+
+def extract_today_count(full_text):
+    clean = clean_text_for_parsing(full_text)
+    
+    # Priority 1: "owo count" block followed by "today" and digits
+    pattern1 = r'owo\s*count[\s\S]*?today\s*[:\-\s]+(\d[\d,]*)'
+    matches = re.findall(pattern1, clean, re.IGNORECASE)
+    if matches:
+        last_match = matches[-1]
+        try:
+            return int(last_match.replace(',', ''))
+        except ValueError:
+            pass
+            
+    # Priority 2: If "owo count" exists anywhere, find "today: <digits>"
+    if re.search(r'owo\s*count', clean, re.IGNORECASE):
+        matches2 = re.findall(r'today\s*[:\-\s]+(\d[\d,]*)', clean, re.IGNORECASE)
+        if matches2:
+            last_match = matches2[-1]
+            try:
+                return int(last_match.replace(',', ''))
+            except ValueError:
+                pass
+                
+    return None
+
 def run_applescript(script):
     try:
         res = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, check=True)
         return res.stdout.strip()
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         return ""
 
 def play_alert_sound():
@@ -118,7 +161,6 @@ def activate_chrome_window(win_id):
         repeat with w in windows
             if (id of w as string) is "{win_id}" then
                 set index of w to 1
-                -- Check if active tab is discord, if not find and select discord tab
                 set currentTitle to title of active tab of w
                 if not (currentTitle contains "Discord" or currentTitle contains "discord") then
                     repeat with i from 1 to count of tabs of w
@@ -158,6 +200,29 @@ def check_captcha_on_active_window(win_id):
         return True
     return False
 
+def get_chrome_page_text(win_id):
+    """
+    Attempts to get the innerText of the active Discord tab in Chrome.
+    Falls back to window title if JS execution is disabled.
+    """
+    script = f'''
+    tell application "Google Chrome"
+        repeat with w in windows
+            if (id of w as string) is "{win_id}" then
+                try
+                    tell active tab of w
+                        return execute javascript "document.body.innerText"
+                    end tell
+                on error
+                    return title of active tab of w
+                end try
+            end if
+        end repeat
+        return ""
+    end tell
+    '''
+    return run_applescript(script)
+
 def send_message_mac(text):
     """
     Simulates typing text into the focused Discord input box and pressing Return.
@@ -169,6 +234,34 @@ def send_message_mac(text):
     end tell
     '''
     run_applescript(script)
+
+def check_hnsr_target_mac(win_id, window_label):
+    print(f"\n[{time.strftime('%H:%M:%S')}] [{window_label}] 🔍 Đang gửi lệnh kiểm tra '{HNSR_COMMAND}'...")
+    send_message_mac(HNSR_COMMAND)
+    
+    today_count = None
+    for attempt in range(2):
+        time.sleep(2.0 if attempt == 0 else 1.5)
+        page_text = get_chrome_page_text(win_id)
+        today_count = extract_today_count(page_text)
+        if today_count is not None:
+            break
+            
+    if today_count is not None:
+        print(f"[{time.strftime('%H:%M:%S')}] [{window_label}] 📊 Kết quả '{HNSR_COMMAND}': OwO count Today = {today_count} / {TARGET_OWO_TODAY}")
+        if today_count >= TARGET_OWO_TODAY:
+            print("\n" + "=" * 65)
+            print(f"🎯 [HOÀN THÀNH MỤC TIÊU] OwO count Today đã đạt {today_count} (Chỉ tiêu: {TARGET_OWO_TODAY})!")
+            print(f"🛑 Dừng hẳn chương trình theo đúng yêu cầu cấu hình.")
+            print("=" * 65)
+            play_alert_sound()
+            sys.exit(0)
+        else:
+            print(f"[{time.strftime('%H:%M:%S')}] [{window_label}] Chưa đạt mục tiêu ({today_count} < {TARGET_OWO_TODAY}). Tiếp tục chu kỳ...")
+    else:
+        print(f"[{time.strftime('%H:%M:%S')}] [{window_label}] Chưa đọc được thông số Today từ '{HNSR_COMMAND}'. Tiếp tục chu kỳ...")
+        
+    time.sleep(random.uniform(1.0, 2.0))
 
 def execute_commands_for_window(commands, rates, max_interval, window_label):
     for i, cmd in enumerate(commands):
@@ -188,6 +281,8 @@ def main_loop():
     print("========================================================")
     print(" Discord OwO Auto-Bot for macOS (Google Chrome)")
     print(" Pipelined Multi-Window Alternating Enabled")
+    if CHECK_HNSR:
+        print(f" Theo dõi mục tiêu: Lệnh '{HNSR_COMMAND}', tần suất mỗi {HNSR_FREQUENCY} chu kỳ, mục tiêu Today = {TARGET_OWO_TODAY}.")
     print(" Press Ctrl+C in this terminal to stop.")
     print("========================================================")
     
@@ -208,6 +303,7 @@ def main_loop():
     
     # Track when each window will finish its cooldown
     window_ready_times = {} # win_id -> next_ready_timestamp
+    window_cycle_counts = {} # win_id -> cycle count
     window_turn_index = 0
     
     try:
@@ -248,6 +344,16 @@ def main_loop():
                     sys.exit(0)
                     
             is_first_cycle = False
+            
+            # Increment cycle count for this window
+            window_cycle_counts[win_id] = window_cycle_counts.get(win_id, 0) + 1
+            curr_cycles = window_cycle_counts[win_id]
+            
+            # Periodic check for HNSR / Today target
+            if CHECK_HNSR:
+                should_check = (curr_cycles == 1 and CHECK_HNSR_ON_START) or (curr_cycles % HNSR_FREQUENCY == 0)
+                if should_check:
+                    check_hnsr_target_mac(win_id, window_label)
             
             commands = ["owo", "owoh", "owob"]
             if RANDOM_ORDER:

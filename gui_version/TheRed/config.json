@@ -12,5 +12,10 @@
   },
   "random_order": true,
   "max_interval": 3.0,
-  "multi_window_mode": "alternate"
+  "multi_window_mode": "alternate",
+  "check_hnsr": true,
+  "hnsr_command": "hnsr",
+  "hnsr_frequency": 20,
+  "target_owo_today": 300,
+  "check_hnsr_on_start": true
 }

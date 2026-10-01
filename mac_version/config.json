@@ -11,5 +11,10 @@
     "owob": 15.0
   },
   "random_order": true,
-  "max_interval": 3.0
+  "max_interval": 3.0,
+  "check_hnsr": true,
+  "hnsr_command": "hnsr",
+  "hnsr_frequency": 20,
+  "target_owo_today": 300,
+  "check_hnsr_on_start": true
 }

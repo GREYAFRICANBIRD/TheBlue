@@ -39,7 +39,13 @@ def load_config():
             "owob": 15.0
         },
         "random_order": True,
-        "max_interval": 3.0
+        "max_interval": 3.0,
+        "multi_window_mode": "alternate",
+        "check_hnsr": True,
+        "hnsr_command": "hnsr",
+        "hnsr_frequency": 20,
+        "target_owo_today": 300,
+        "check_hnsr_on_start": True
     }
     
     if not os.path.exists(CONFIG_FILE):
@@ -155,10 +161,48 @@ MAX_COOLDOWNS = config.get("max_cooldowns", {"owo": 10.0, "owoh": 15.0, "owob": 
 RANDOM_ORDER = config.get("random_order", True)
 MAX_INTERVAL = config.get("max_interval", 3.0)
 
+# HNSR / Today Target configurations
+CHECK_HNSR = config.get("check_hnsr", True)
+HNSR_COMMAND = config.get("hnsr_command", "hnsr")
+HNSR_FREQUENCY = max(1, config.get("hnsr_frequency", 20))
+TARGET_OWO_TODAY = config.get("target_owo_today", 300)
+CHECK_HNSR_ON_START = config.get("check_hnsr_on_start", True)
+
 def normalize_text(text):
     text = re.sub(r'[\u200b-\u200d\ufeff]', '', text)
     text = re.sub(r'\s+', ' ', text)
     return text.strip().lower()
+
+def clean_text_for_parsing(text):
+    t = re.sub(r'[\u200b-\u200d\ufeff]', '', text)
+    t = re.sub(r'[*_`~>]', ' ', t)
+    t = re.sub(r'[ \t]+', ' ', t)
+    return t
+
+def extract_today_count(full_text):
+    clean = clean_text_for_parsing(full_text)
+    
+    # Priority 1: "owo count" block followed by "today" and digits
+    pattern1 = r'owo\s*count[\s\S]*?today\s*[:\-\s]+(\d[\d,]*)'
+    matches = re.findall(pattern1, clean, re.IGNORECASE)
+    if matches:
+        last_match = matches[-1]
+        try:
+            return int(last_match.replace(',', ''))
+        except ValueError:
+            pass
+            
+    # Priority 2: If "owo count" exists anywhere, find "today: <digits>"
+    if re.search(r'owo\s*count', clean, re.IGNORECASE):
+        matches2 = re.findall(r'today\s*[:\-\s]+(\d[\d,]*)', clean, re.IGNORECASE)
+        if matches2:
+            last_match = matches2[-1]
+            try:
+                return int(last_match.replace(',', ''))
+            except ValueError:
+                pass
+                
+    return None
 
 def get_message_datetime(text):
     match = re.search(r'lúc\s+(\d{1,2}):(\d{2})[^,]*,\s*(\d{1,2})\s+tháng\s+(\d{1,2}),\s*(\d{4})', text)
@@ -194,6 +238,50 @@ def check_captcha_exists(window):
             
     check_control(window)
     return has_captcha[0]
+
+def get_discord_chat_text(window):
+    text_lines = []
+    def collect_text(ctrl, depth=0):
+        if depth > 35:
+            return
+        name = ctrl.Name
+        if name and isinstance(name, str) and name.strip():
+            text_lines.append(name.strip())
+        for child in ctrl.GetChildren():
+            collect_text(child, depth + 1)
+    collect_text(window)
+    return "\n".join(text_lines)
+
+def check_hnsr_target(target_window, window_label):
+    print(f"\n[{time.strftime('%H:%M:%S')}] [{window_label}] 🔍 Đang gửi lệnh kiểm tra '{HNSR_COMMAND}'...")
+    auto.SendKeys(f'{HNSR_COMMAND}{{Enter}}')
+    
+    today_count = None
+    # Wait for response (check after 2.0s and 3.5s)
+    for attempt in range(2):
+        time.sleep(2.0 if attempt == 0 else 1.5)
+        chat_text = get_discord_chat_text(target_window)
+        today_count = extract_today_count(chat_text)
+        if today_count is not None:
+            break
+            
+    if today_count is not None:
+        print(f"[{time.strftime('%H:%M:%S')}] [{window_label}] 📊 Kết quả '{HNSR_COMMAND}': OwO count Today = {today_count} / {TARGET_OWO_TODAY}")
+        if today_count >= TARGET_OWO_TODAY:
+            print("\n" + "=" * 65)
+            print(f"🎯 [HOÀN THÀNH MỤC TIÊU] OwO count Today đã đạt {today_count} (Chỉ tiêu: {TARGET_OWO_TODAY})!")
+            print(f"🛑 Dừng hẳn chương trình theo đúng yêu cầu cấu hình.")
+            print("=" * 65)
+            for _ in range(4):
+                winsound.Beep(1200, 350)
+                time.sleep(0.1)
+            sys.exit(0)
+        else:
+            print(f"[{time.strftime('%H:%M:%S')}] [{window_label}] Chưa đạt mục tiêu ({today_count} < {TARGET_OWO_TODAY}). Tiếp tục chu kỳ...")
+    else:
+        print(f"[{time.strftime('%H:%M:%S')}] [{window_label}] Chưa đọc được thông số Today từ '{HNSR_COMMAND}'. Tiếp tục chu kỳ...")
+        
+    time.sleep(random.uniform(1.0, 2.0))
 
 def bring_window_to_front(hwnd):
     if not hwnd:
@@ -347,6 +435,8 @@ def execute_commands_for_window(target_window, commands, rates, max_interval, wi
 def main_loop():
     print(f"Starting Multi-Window Discord Bot using {BROWSER_TYPE.upper()} (GUI Mode).")
     print("Chế độ: Luân phiên liên tục (Trong khi cửa sổ này cooldown, lập tức chuyển sang cửa sổ kia).")
+    if CHECK_HNSR:
+        print(f"Theo dõi mục tiêu: Lệnh '{HNSR_COMMAND}', tần suất mỗi {HNSR_FREQUENCY} chu kỳ, mục tiêu Today = {TARGET_OWO_TODAY}.")
     print("Press Ctrl+C in this terminal to stop.")
     
     rates = {
@@ -366,6 +456,7 @@ def main_loop():
     
     # Track when each window will finish its cooldown
     window_ready_times = {} # handle -> next_ready_timestamp
+    window_cycle_counts = {} # handle -> cycle count
     window_turn_index = 0
     
     try:
@@ -404,6 +495,16 @@ def main_loop():
                 continue
                 
             is_first_cycle = False
+            
+            # Increment cycle count for this window
+            window_cycle_counts[handle] = window_cycle_counts.get(handle, 0) + 1
+            curr_cycles = window_cycle_counts[handle]
+            
+            # Periodic check for HNSR / Today target
+            if CHECK_HNSR:
+                should_check = (curr_cycles == 1 and CHECK_HNSR_ON_START) or (curr_cycles % HNSR_FREQUENCY == 0)
+                if should_check:
+                    check_hnsr_target(target_window, window_label)
             
             commands = ["owo", "owoh", "owob"]
             if RANDOM_ORDER:

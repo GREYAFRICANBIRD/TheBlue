@@ -4,7 +4,15 @@ Hệ thống tự động gửi lệnh OwO (`owo`, `owoh`, `owob`) với cơ ch�
 
 ---
 
-## 🎯 Tính năng mới: Tự động kiểm tra lệnh `hnsr` & Dừng theo chỉ tiêu Today
+## 📦 Tải bản phát hành (Releases):
+Bạn có thể tải trực tiếp file chạy đóng gói sẵn tại trang Releases của GitHub:
+👉 **[Tải bản mới nhất (Releases)](https://github.com/GREYAFRICANBIRD/TheBlue/releases)**
+* **🪟 Windows**: Tải `OwOBot-Windows.zip` (gồm file `show_discord_window.exe` và `config.json`).
+* **🍎 macOS**: Tải `OwOBotMac-macOS.zip` (gồm app `OwOBotMac.app` và `config.json`).
+
+---
+
+## 🎯 Tính năng tự động kiểm tra `hnsr` & Dừng theo chỉ tiêu Today:
 
 * Tự động gửi lệnh `hnsr` định kỳ theo tần suất cấu hình (`hnsr_frequency`).
 * Phân tích phản hồi từ bot máy chủ: Quét mục **OwO count** và đọc chỉ số **Today**.
@@ -19,26 +27,18 @@ Hệ thống tự động gửi lệnh OwO (`owo`, `owoh`, `owob`) với cơ ch�
 
 ---
 
-## 🍎 macOS Version (`mac_version/`)
+## 🪟 Windows Version (`window_version/`)
 
-### Cách hoạt động:
-* Tương tác trực tiếp với **Google Chrome** qua AppleScript (`osascript`) bản địa của macOS.
-* Tự động phát hiện các cửa sổ Chrome đang mở Discord.
-* Gửi lệnh luân phiên gối đầu và tự động kiểm tra `hnsr` theo chỉ tiêu.
-
-### Tải bản macOS `.app` tự động qua GitHub Actions:
-Dự án đã tích hợp sẵn GitHub Actions workflow (`.github/workflows/build-mac.yml`):
-1. Mỗi khi code được push lên GitHub, GitHub Actions sẽ tự động khởi động runner macOS để build file ứng dụng **`OwOBotMac.app`**.
-2. Để tải về:
-   * Vào tab **Actions** trên repository GitHub của bạn: [https://github.com/GREYAFRICANBIRD/TheBlue/actions](https://github.com/GREYAFRICANBIRD/TheBlue/actions)
-   * Chọn lần chạy (run) mới nhất của workflow **Build macOS App**.
-   * Cuộn xuống phần **Artifacts** và tải về file **`OwOBotMac-macOS.zip`**.
-   * Giải nén và mở file `.app` để chạy.
+* File mã nguồn: `show_discord_window.py`
+* Sử dụng Windows UI Automation & Win32 API.
+* Tự động điều khiển và luân phiên giữa 2 cửa sổ Chrome trên thanh Taskbar.
+* Chạy trực tiếp qua `python show_discord_window.py` hoặc file thực thi `.exe`.
 
 ---
 
-## 🪟 Windows Version (`gui_version/`)
+## 🍎 macOS Version (`mac_version/`)
 
-* Sử dụng Windows UI Automation & Win32 API.
-* Tự động điều khiển và luân phiên giữa 2 cửa sổ Chrome trên thanh Taskbar.
-* Chạy trực tiếp qua `show_discord_gui.py` hoặc file thực thi `.exe` trong thư mục `TheRed/`.
+* File mã nguồn: `show_discord_mac.py`
+* Tương tác trực tiếp với **Google Chrome** qua AppleScript (`osascript`) bản địa của macOS.
+* Tự động phát hiện các cửa sổ Chrome đang mở Discord.
+* Gửi lệnh luân phiên gối đầu và tự động kiểm tra `hnsr` theo chỉ tiêu.
